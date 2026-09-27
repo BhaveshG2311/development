@@ -10,6 +10,7 @@ import JoinSocietyPage from "../modules/societies/pages/JoinSocietyPage.jsx";
 import SocietiesPage from "../modules/societies/pages/SocietiesPage.jsx";
 import SocietyDashboardPage from "../modules/societies/pages/SocietyDashboardPage.jsx";
 import SocietyMembersPage from "../modules/societies/pages/SocietyMembersPage.jsx";
+import SocietyJoinRequestsPage from "../modules/societies/pages/SocietyJoinRequestsPage.jsx";
 
 import ContactsPage from "../modules/contacts/pages/ContactsPage.jsx";
 import CreateContactPage from "../modules/contacts/pages/CreateContactPage.jsx";
@@ -88,6 +89,10 @@ const router = createBrowserRouter([
           {
             path: "/societies/:societyId/members",
             element: <SocietyMembersPage />
+          },
+          {
+            path: "/societies/:societyId/join-requests",
+            element: <SocietyJoinRequestsPage />
           },
           {
             path: "/societies/:societyId/contacts",

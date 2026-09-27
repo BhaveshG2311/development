@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Flat from "../../models/Flat.js";
 import Society from "../../models/Society.js";
 import SocietyMember from "../../models/SocietyMember.js";
+import SocietyJoinRequest from "../../models/SocietyJoinRequest.js";
 import Subscription, { PLAN_NAME, SUBSCRIPTION_STATUS } from "../../models/Subscription.js";
 import User from "../../models/User.js";
 import ApiError from "../../utils/apiError.js";
@@ -296,6 +297,38 @@ export const verifyJoiningCode = async ({ userId, payload }) => {
     status: "ACTIVE"
   });
 
+  if (existingMembership) {
+    return {
+      id: society._id.toString(),
+      name: society.name,
+      address: society.address,
+      joiningCode: society.joiningCode,
+      numberOfFlats: society.numberOfFlats,
+      facilities: society.facilities,
+      alreadyMember: true,
+      requestStatus: "COMPLETED"
+    };
+  }
+
+  let request = await SocietyJoinRequest.findOne({
+    societyId: society._id,
+    userId
+  });
+
+  if (!request) {
+    request = await SocietyJoinRequest.create({
+      societyId: society._id,
+      userId,
+      status: "PENDING"
+    });
+  } else if (request.status === "REJECTED") {
+    request.status = "PENDING";
+    request.reviewedBy = null;
+    request.reviewedAt = null;
+    request.completedAt = null;
+    await request.save();
+  }
+
   return {
     id: society._id.toString(),
     name: society.name,
@@ -303,8 +336,129 @@ export const verifyJoiningCode = async ({ userId, payload }) => {
     joiningCode: society.joiningCode,
     numberOfFlats: society.numberOfFlats,
     facilities: society.facilities,
-    alreadyMember: Boolean(existingMembership)
+    alreadyMember: false,
+    requestStatus: request.status,
+    requestId: request._id.toString()
   };
+};
+
+const serializeJoinRequest = (request) => ({
+  id: request._id.toString(),
+  societyId: request.societyId.toString(),
+  status: request.status,
+  createdAt: request.createdAt,
+  reviewedAt: request.reviewedAt,
+  user: request.userId
+    ? {
+        id: request.userId._id.toString(),
+        name: request.userId.name,
+        email: request.userId.email,
+        mobileNumber: request.userId.mobileNumber
+      }
+    : null
+});
+
+export const getSocietyJoinRequests = async ({ societyId }) => {
+  if (!mongoose.isValidObjectId(societyId)) {
+    throw new ApiError(400, "SOCIETY_ID_INVALID", "Society ID is invalid");
+  }
+
+  const society = await Society.findOne({
+    _id: societyId,
+    isActive: true
+  })
+    .select("_id")
+    .lean();
+
+  if (!society) {
+    throw new ApiError(404, "SOCIETY_NOT_FOUND", "The requested society does not exist");
+  }
+
+  const requests = await SocietyJoinRequest.find({
+    societyId,
+    status: "PENDING"
+  })
+    .populate({
+      path: "userId",
+      select: "name email mobileNumber"
+    })
+    .sort({ createdAt: 1 })
+    .lean();
+
+  return requests.map(serializeJoinRequest);
+};
+
+const updateJoinRequestStatus = async ({ societyId, requestId, secretaryId, status }) => {
+  if (!mongoose.isValidObjectId(societyId)) {
+    throw new ApiError(400, "SOCIETY_ID_INVALID", "Society ID is invalid");
+  }
+
+  if (!mongoose.isValidObjectId(requestId)) {
+    throw new ApiError(400, "JOIN_REQUEST_ID_INVALID", "Join request ID is invalid");
+  }
+
+  const society = await Society.findOne({
+    _id: societyId,
+    isActive: true
+  })
+    .select("_id secretary")
+    .lean();
+
+  if (!society) {
+    throw new ApiError(404, "SOCIETY_NOT_FOUND", "The requested society does not exist");
+  }
+
+  if (society.secretary.toString() !== secretaryId.toString()) {
+    throw new ApiError(
+      403,
+      "SOCIETY_ROLE_FORBIDDEN",
+      "Only the society secretary can manage join requests"
+    );
+  }
+
+  const request = await SocietyJoinRequest.findOne({
+    _id: requestId,
+    societyId,
+    status: "PENDING"
+  });
+
+  if (!request) {
+    throw new ApiError(
+      404,
+      "SOCIETY_JOIN_REQUEST_NOT_FOUND",
+      "The pending society join request could not be found"
+    );
+  }
+
+  request.status = status;
+  request.reviewedBy = secretaryId;
+  request.reviewedAt = new Date();
+  await request.save();
+
+  await request.populate({
+    path: "userId",
+    select: "name email mobileNumber"
+  });
+
+  return serializeJoinRequest(request);
+};
+
+export const approveSocietyJoinRequest = async ({ societyId, requestId, secretaryId }) => {
+  return updateJoinRequestStatus({
+    societyId,
+    requestId,
+    secretaryId,
+    status: "APPROVED"
+  });
+};
+
+export const rejectSocietyJoinRequest = async ({ societyId, requestId, secretaryId }) => {
+  return updateJoinRequestStatus({
+    societyId,
+    requestId,
+    secretaryId,
+    status: "REJECTED"
+  });
 };
 
 const flatDetailsMatch = (existingFlat, details) => {
@@ -346,6 +500,20 @@ export const joinSociety = async ({ user, societyId, payload }) => {
           409,
           "SOCIETY_MEMBERSHIP_ALREADY_EXISTS",
           "You are already a member of this society"
+        );
+      }
+
+      const joinRequest = await SocietyJoinRequest.findOne({
+        societyId,
+        userId: user.id,
+        status: "APPROVED"
+      }).session(session);
+
+      if (!joinRequest) {
+        throw new ApiError(
+          403,
+          "SOCIETY_JOIN_APPROVAL_REQUIRED",
+          "The society secretary must approve your joining request before you can join"
         );
       }
 
@@ -454,6 +622,10 @@ export const joinSociety = async ({ user, societyId, payload }) => {
           session
         }
       );
+
+      joinRequest.status = "COMPLETED";
+      joinRequest.completedAt = new Date();
+      await joinRequest.save({ session });
 
       result = {
         society,

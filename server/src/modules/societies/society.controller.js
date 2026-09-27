@@ -5,7 +5,10 @@ import {
   getMySocieties,
   getSocietyDetails,
   getSocietyMembers,
+  getSocietyJoinRequests,
   joinSociety,
+  approveSocietyJoinRequest,
+  rejectSocietyJoinRequest,
   verifyJoiningCode
 } from "./society.service.js";
 
@@ -53,6 +56,55 @@ export const joinSocietyController = asyncHandler(async (req, res) => {
     message: "society joined successfully",
     data: {
       society
+    }
+  });
+});
+
+export const getSocietyJoinRequestsController = asyncHandler(async (req, res) => {
+  const requests = await getSocietyJoinRequests({
+    societyId: req.params.societyId
+  });
+
+  return res.status(200).json({
+    success: true,
+    code: "SOCIETY_JOIN_REQUESTS_FETCHED",
+    message: "society join requests fetched successfully",
+    data: {
+      requests
+    }
+  });
+});
+
+export const approveSocietyJoinRequestController = asyncHandler(async (req, res) => {
+  const request = await approveSocietyJoinRequest({
+    societyId: req.params.societyId,
+    requestId: req.params.requestId,
+    secretaryId: req.user.id
+  });
+
+  return res.status(200).json({
+    success: true,
+    code: "SOCIETY_JOIN_REQUEST_APPROVED",
+    message: "society join request approved successfully",
+    data: {
+      request
+    }
+  });
+});
+
+export const rejectSocietyJoinRequestController = asyncHandler(async (req, res) => {
+  const request = await rejectSocietyJoinRequest({
+    societyId: req.params.societyId,
+    requestId: req.params.requestId,
+    secretaryId: req.user.id
+  });
+
+  return res.status(200).json({
+    success: true,
+    code: "SOCIETY_JOIN_REQUEST_REJECTED",
+    message: "society join request rejected successfully",
+    data: {
+      request
     }
   });
 });
