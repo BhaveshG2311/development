@@ -28,6 +28,25 @@ export const getSociety = async (societyId) => {
   return response.data.data;
 };
 
+export const getSocietyJoinRequests = async (societyId) => {
+  const response = await apiClient.get(`/societies/${societyId}/join-requests`);
+  return response.data.data.requests;
+};
+
+export const approveSocietyJoinRequest = async (societyId, requestId) => {
+  const response = await apiClient.post(
+    `/societies/${societyId}/join-requests/${requestId}/approve`
+  );
+  return response.data.data.request;
+};
+
+export const rejectSocietyJoinRequest = async (societyId, requestId) => {
+  const response = await apiClient.post(
+    `/societies/${societyId}/join-requests/${requestId}/reject`
+  );
+  return response.data.data.request;
+};
+
 export const getSocietyMembers = async (societyId) => {
   const response = await apiClient.get(`/societies/${societyId}/members`);
   return response.data.data.members;

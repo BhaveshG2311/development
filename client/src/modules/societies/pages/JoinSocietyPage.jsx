@@ -105,6 +105,11 @@ function JoinSocietyPage() {
       return;
     }
 
+    if (verifiedSociety.requestStatus !== "APPROVED") {
+      setErrorMessage("The society secretary must approve your joining request first.");
+      return;
+    }
+
     if (
       !form.flatNumber.trim() ||
       form.floor === "" ||
@@ -139,6 +144,8 @@ function JoinSocietyPage() {
 
       if (code === "SOCIETY_MEMBERSHIP_ALREADY_EXISTS") {
         setErrorMessage("You are already a member of this society.");
+      } else if (code === "SOCIETY_JOIN_APPROVAL_REQUIRED") {
+        setErrorMessage("The society secretary must approve your joining request first.");
       } else {
         setErrorMessage(getApiErrorMessage(error, "Unable to join the society."));
       }
@@ -147,12 +154,13 @@ function JoinSocietyPage() {
     }
   };
 
-  const isVerified = verifiedSociety && !verifiedSociety.alreadyMember;
+  const isVerified =
+    verifiedSociety?.requestStatus === "APPROVED" && !verifiedSociety.alreadyMember;
 
   return (
     <AppShell
       title="Join a society"
-      description="Verify your society first, then add your flat and resident details."
+      description="Enter the society code, wait for secretary approval, then add your flat and resident details."
       backTo="/societies"
     >
       {errorMessage && (
@@ -252,34 +260,45 @@ function JoinSocietyPage() {
                   disabled={verifying}
                   className="w-full rounded-xl bg-slate-950 px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                 >
-                  {verifying ? "Verifying society..." : "Verify society"}
+                  {verifying ? "Sending request..." : "Send joining request"}
                 </button>
               </form>
 
               {verifiedSociety && (
                 <div
                   className={`mt-7 overflow-hidden rounded-2xl border ${
-                    verifiedSociety.alreadyMember ? "border-slate-200" : "border-emerald-200"
+                    verifiedSociety.alreadyMember || verifiedSociety.requestStatus === "PENDING"
+                      ? "border-slate-200"
+                      : "border-emerald-200"
                   }`}
                 >
                   <div
                     className={`flex items-center justify-between px-5 py-3 ${
-                      verifiedSociety.alreadyMember ? "bg-slate-50" : "bg-emerald-50"
+                      verifiedSociety.alreadyMember || verifiedSociety.requestStatus === "PENDING"
+                        ? "bg-slate-50"
+                        : "bg-emerald-50"
                     }`}
                   >
                     <span
                       className={`text-[11px] font-bold uppercase tracking-[0.14em] ${
-                        verifiedSociety.alreadyMember ? "text-slate-500" : "text-emerald-700"
+                        verifiedSociety.alreadyMember || verifiedSociety.requestStatus === "PENDING"
+                          ? "text-slate-500"
+                          : "text-emerald-700"
                       }`}
                     >
-                      {verifiedSociety.alreadyMember ? "Already joined" : "Society verified"}
+                      {verifiedSociety.alreadyMember
+                        ? "Already joined"
+                        : verifiedSociety.requestStatus === "APPROVED"
+                          ? "Request approved"
+                          : "Approval pending"}
                     </span>
 
-                    {!verifiedSociety.alreadyMember && (
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">
-                        ✓
-                      </span>
-                    )}
+                    {!verifiedSociety.alreadyMember &&
+                      verifiedSociety.requestStatus === "APPROVED" && (
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">
+                          ✓
+                        </span>
+                      )}
                   </div>
 
                   <div className="p-5">
@@ -288,6 +307,22 @@ function JoinSocietyPage() {
                     <p className="mt-2 text-sm leading-6 text-slate-500">
                       {verifiedSociety.address}
                     </p>
+
+                    {verifiedSociety.requestStatus === "PENDING" &&
+                      !verifiedSociety.alreadyMember && (
+                        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-800">
+                          Your joining request has been sent to the society secretary. You can
+                          complete your flat details after the secretary approves the request.
+                        </div>
+                      )}
+
+                    {verifiedSociety.requestStatus === "APPROVED" &&
+                      !verifiedSociety.alreadyMember && (
+                        <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-5 text-emerald-800">
+                          Your request has been approved. Complete your flat and resident details
+                          below to finish joining the society.
+                        </div>
+                      )}
 
                     <div className="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4">
                       <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
@@ -305,7 +340,13 @@ function JoinSocietyPage() {
                           Status
                         </p>
 
-                        <p className="mt-0.5 text-sm font-bold text-slate-900">Verified</p>
+                        <p className="mt-0.5 text-sm font-bold text-slate-900">
+                          {verifiedSociety.alreadyMember
+                            ? "Member"
+                            : verifiedSociety.requestStatus === "APPROVED"
+                              ? "Approved"
+                              : "Waiting for secretary"}
+                        </p>
                       </div>
                     </div>
 
@@ -351,13 +392,15 @@ function JoinSocietyPage() {
                     : "border-slate-200 bg-slate-50 text-slate-400"
                 }`}
               >
-                {isVerified ? "✓" : "🔒"}
+                {isVerified ? "✓" : "—"}
               </div>
             </div>
 
-            {!verifiedSociety && (
+            {!isVerified && (
               <div className="mx-7 mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                Verify your society first to unlock this form.
+                {verifiedSociety?.requestStatus === "PENDING"
+                  ? "Wait for the secretary to approve your joining request."
+                  : "Enter your society joining code and wait for approval to unlock this form."}
               </div>
             )}
 
